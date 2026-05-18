@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI.LAW CHAT - Nexus-8</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="main-header">
+      <div class="container">
+        <div class="logo"><a href="#">AI.LAW CHAT</a></div>
+      </div>
+    </header>
+    <main class="container">
+      <div class="qa-container">
+        <div id="user-section" class="qa-card user-card" style="display: none">
+          <p id="user-question" style="margin: 0; font-weight: bold"></p>
+        </div>
+        <div class="qa-card ai-card">
+          <span class="guide-tag">Nexus-8 Engine</span>
+          <div id="loading-status" style="display: none; margin-bottom: 8px">
+            <span
+              id="loading-step"
+              style="color: #718096; font-size: 0.85em"
+            ></span>
+            <span id="loading-dots" style="color: #718096"></span>
+          </div>
+          <p id="ai-response" style="margin: 0">
+            労働基準法についての回答が可能です。
+          </p>
+        </div>
+      </div>
+    </main>
+    <section class="input-section">
+      <div class="container">
+        <div class="input-container-inner">
+          <div class="chat-input-wrapper">
+            <textarea
+              id="chat-input"
+              rows="2"
+              placeholder="質問を入力してください..."
+            ></textarea>
+            <button type="button" id="send-btn" class="btn-submit">解析</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script>
+      const sendBtn = document.getElementById("send-btn");
+      const chatInput = document.getElementById("chat-input");
+      const aiResponseArea = document.getElementById("ai-response");
+      const userSection = document.getElementById("user-section");
+      const userQuestionArea = document.getElementById("user-question");
+      const loadingStatus = document.getElementById("loading-status");
+      const loadingStep = document.getElementById("loading-step");
+      const loadingDots = document.getElementById("loading-dots");
+
+      let dotsInterval = null;
+      let stepTimeout = null;
+
+      function startLoadingSteps(keywords) {
+        const steps = [
+          {
+            label: "条文データベースを検索中",
+            detail:
+              keywords.length > 0 ? `キーワード: ${keywords.join("、")}` : "",
+            duration: 3000,
+          },
+          { label: "関連条文を照合中", detail: "", duration: 3000 },
+          { label: "回答を生成中", detail: "", duration: 99999 },
+        ];
+
+        loadingStatus.style.display = "block";
+        aiResponseArea.innerHTML = "";
+
+        function showStep(index) {
+          if (index >= steps.length) return;
+          const step = steps[index];
+          loadingStep.textContent = step.detail
+            ? `${step.label} — ${step.detail}`
+            : step.label;
+
+          let dots = 0;
+          clearInterval(dotsInterval);
+          dotsInterval = setInterval(() => {
+            dots = (dots + 1) % 4;
+            loadingDots.textContent = ".".repeat(dots);
+          }, 400);
+
+          if (index < steps.length - 1) {
+            stepTimeout = setTimeout(() => showStep(index + 1), step.duration);
+          }
+        }
+
+        showStep(0);
+      }
+
+      function stopLoading() {
+        clearInterval(dotsInterval);
+        clearTimeout(stepTimeout);
+        loadingStatus.style.display = "none";
+      }
+
+      function typeWriter(text, element, speed = 15) {
+        element.innerHTML = "";
+        let i = 0;
+        const interval = setInterval(() => {
+          if (i < text.length) {
+            element.innerHTML = text.slice(0, i + 1).replace(/\n/g, "<br>");
+            i++;
+          } else {
+            clearInterval(interval);
+          }
+        }, speed);
+      }
+
+      sendBtn.addEventListener("click", async () => {
+        const query = chatInput.value.trim();
+        if (!query) return;
+
+        userSection.style.display = "block";
+        userQuestionArea.innerText = query;
+        chatInput.value = "";
+        sendBtn.disabled = true;
+
+        const keywords = query.match(/[^\x00-\x7F]{2,}/g) || [];
+        startLoadingSteps(keywords);
+
+        try {
+          const response = await fetch("http://localhost:5000/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: query }),
+          });
+          const data = await response.json();
+          stopLoading();
+          typeWriter(data.answer, aiResponseArea);
+        } catch (error) {
+          stopLoading();
+          aiResponseArea.innerText = "エラー: サーバー接続失敗";
+        } finally {
+          sendBtn.disabled = false;
+        }
+      });
+
+      chatInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendBtn.click();
+        }
+      });
+    </script>
+  </body>
+</html>
